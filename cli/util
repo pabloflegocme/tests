@@ -1,0 +1,73 @@
+const shell = require('shelljs');
+const chalk = require('chalk');
+
+const {log} = console;
+
+const showVersion = (v) =>
+  log(chalk.italic.bold.bgCyan('CLI v%s'), v);
+
+const logError = (...[err, ...args]) => log(chalk.bold.red(err), ...args);
+
+// Helpers
+const command = (main) => {
+  return {
+    cmd: [main],
+    main,
+    options: {silent: true},
+    setOptions(opts = {}) {
+      this.options = {...this.options, ...opts};
+      return this;
+    },
+    verbose: false,
+    setVerbose(verbose = false) {
+      this.verbose = verbose;
+      return this;
+    },
+    withFlags(flags = {}) {
+      Object.keys(flags).forEach(
+        k => flags[k] && this.cmd.push(`--${k}`)
+      );
+      // Make it chainable
+      return this;
+    },
+    withScopes(scopes = []) {
+      if (scopes.length > 0) {
+        // Handle single or multiple scopes
+        const s = (scopes.length > 1)
+          ? `{${scopes.join(',')}}` : scopes[0];
+        // Insert the scopes
+        this.cmd.push('--scope', s);
+      }
+      return this;
+    },
+    execOutput: {},
+    exec(cb) {
+      const cmd = this.cmd.join(' ');
+      // If enabled show the command
+      /* this.verbose && */log(chalk.bold.bgBlue('$ %s'), cmd);
+      // Execute the command
+      this.execOutput = shell.exec(cmd, this.options, cb);
+      return this;
+    },
+    listen(out, listener) {
+      const propExists = this.execOutput[out] !== undefined;
+      const validListener = typeof listener === 'function';
+      // If params are correct register the listener
+      propExists && validListener && this.execOutput[out]
+        .on('data', listener);
+      // Otherwise print error messages
+      (!propExists || !validListener) && logError(
+        'Error registering listener(%s, %s)', out, listener
+      );
+      !propExists && logError(
+        'Param out must be one of the following: [stdout, stderr]'
+      );
+      !validListener && logError(
+        'Param listener must be a Function'
+      );
+      return this;
+    }
+  };
+};
+
+module.exports = {command, showVersion}
